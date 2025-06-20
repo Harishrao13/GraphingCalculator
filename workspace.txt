@@ -1,0 +1,13 @@
+Expression "cos(x)" {
+    0: EXPR => Expression "x" {
+        0: PUSHVAR x
+    }
+    1: NATIVEFUNC COS
+}
+
+Expression "3x" {
+    0: PUSH 3.0
+    1: PUSHVAR x
+    2: MUL
+}
+

@@ -10,11 +10,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
 
-/**
- * Sidebar equation editor for an individual equation. Signals to listeners
- * (typically the Sidebar) when the expression contained within is updated, or
- * the editor deleted.
- */
 public class EquationEditor extends JPanel implements AncestorListener, ActionListener {
     private int id, width;
     private boolean idSet = false;
@@ -28,28 +23,28 @@ public class EquationEditor extends JPanel implements AncestorListener, ActionLi
 
     private ArrayList<EquationEditorListener> listeners = new ArrayList<>();
 
-    private Equation equation = new Equation("");
+    private Equation equation; // Changed to not initialize here, but in constructor
 
-    /**
-     * Creates a new EquationEditor, which functions as a Swing component. The
-     * id should be sequential and unique, as it is what is passed to callback
-     * interface methods.
-     *
-     * @param id The unique equation id
-     */
-    public EquationEditor(int id) {
+    public EquationEditor(int id, String initialEquationString) { // ADDED initialEquationString
         this.setLayout(new BoxLayout(this, BoxLayout.PAGE_AXIS));
 
-        // Create editor title
         this.titleRow = new JPanel();
         this.titleRow.setLayout(new FlowLayout(FlowLayout.LEFT));
         this.title = new JLabel();
         this.titleRow.add(this.title);
         this.add(this.titleRow);
 
-        // Create expression editor
         this.editor = new JTextField();
         this.editor.setFont(new Font("monospaced", Font.PLAIN, 16));
+
+        // Set initial text here, BEFORE adding the DocumentListener
+        // This prevents the DocumentListener from firing immediately on setText
+        // However, if you want it to fire and process the initial string, you can keep setText after.
+        // For clean initialization, it's often better to create the Equation object directly.
+        this.equation = new Equation(initialEquationString); // Initialize Equation here
+        this.editor.setText(initialEquationString); // Set text field directly
+
+        // Now add the listener. Any *subsequent* changes will trigger equationChanged().
         this.editor.getDocument().addDocumentListener(new DocumentListener() {
             public void insertUpdate(DocumentEvent e) {
                 EquationEditor.this.equationChanged();
@@ -65,15 +60,11 @@ public class EquationEditor extends JPanel implements AncestorListener, ActionLi
         });
         this.add(this.editor);
 
-        // Move focus to new editor field so the user doesn't have to click it
-        // NOTE: this is performed as a callback, otherwise it doesn't work
         this.editor.addAncestorListener(this);
 
-        // Line up buttons on bottom row
         this.buttonRow = new JPanel();
         this.buttonRow.setLayout(new FlowLayout(FlowLayout.RIGHT));
 
-        // Create button to remove the expression
         this.deleteBtn = new JButton("Delete");
         this.deleteBtn.addActionListener(this);
         this.buttonRow.add(this.deleteBtn);
@@ -81,17 +72,25 @@ public class EquationEditor extends JPanel implements AncestorListener, ActionLi
         this.add(this.buttonRow);
 
         this.setID(id);
+
+        // Call equationChanged() once after full setup to ensure initial state is processed
+        // and listeners are notified. This is important if initialEquationString is not empty.
+        if (!initialEquationString.isEmpty()) {
+            this.equationChanged();
+        }
     }
 
-    /**
-     * Called when the equation editor is first added by Swing internally to
-     * its container component. This callback steals the keyboard focus and
-     * gives it to the JTextField contained within this equation editor. This
-     * means that the user does not have to click on the text field themselves
-     * after creating a new equation.
-     *
-     * @param ancestorEvent The event supplied to us by Swing
-     */
+    // --- Original setEquationText method ---
+    // You might still want to keep setEquationText if there are other scenarios
+    // where you need to programmatically change the text *after* initial setup.
+    // However, for initial loading, the constructor change is preferred.
+    public void setEquationText(String text) {
+        this.editor.setText(text);
+        // DocumentListener will fire equationChanged() automatically
+    }
+
+    // ... (rest of EquationEditor methods remain the same) ...
+
     @Override
     public void ancestorAdded(AncestorEvent ancestorEvent) {
         final AncestorListener a = this;
@@ -113,12 +112,6 @@ public class EquationEditor extends JPanel implements AncestorListener, ActionLi
     public void ancestorMoved(AncestorEvent ancestorEvent) {
     }
 
-    /**
-     * Listens for click events on any child components of the equation editor.
-     *
-     * @param actionEvent The event supplied by Swing, used to determine which
-     *                    component was clicked
-     */
     public void actionPerformed(ActionEvent actionEvent) {
         Object source = actionEvent.getSource();
 
@@ -127,12 +120,6 @@ public class EquationEditor extends JPanel implements AncestorListener, ActionLi
         }
     }
 
-    /**
-     * This is usually called when an EquationEditor has been deleted. It
-     * updates the editor's colour and title.
-     *
-     * @param newID The new ID to use
-     */
     public void setID(int newID) {
         if (this.idSet) {
             if (this.id % 2 == 1 && newID % 2 == 0) {
@@ -161,21 +148,10 @@ public class EquationEditor extends JPanel implements AncestorListener, ActionLi
         this.repaint();
     }
 
-    /**
-     * Gets the ID of the equation contained within this editor.
-     *
-     * @return The aforementioned ID
-     */
     public int getID() {
         return this.id;
     }
 
-    /**
-     * Sets the width of the equation editor. Usually called when the parent is
-     * resized.
-     *
-     * @param width The new maximum width of the editor
-     */
     public void setWidth(int width) {
         this.width = width;
         this.setPreferredSize(new Dimension(width, 92));
@@ -186,61 +162,32 @@ public class EquationEditor extends JPanel implements AncestorListener, ActionLi
         this.repaint();
     }
 
-    /**
-     * Adds a new target for edit and removal event callbacks.
-     *
-     * @param listener The new event listener instance
-     */
     public void addEquationEditorListener(EquationEditorListener listener) {
         this.listeners.add(listener);
     }
 
-    /**
-     * Called when the equation is initially modified, as we automatically
-     * assume that the new equation will be valid. Sets the JTextField's
-     * background colour to it's normal value.
-     */
     public void setValid() {
         this.editor.setBackground(this.editorNormalColor);
     }
 
-    /**
-     * Called when the Graph attempts to evaluate the equation, if it finds the
-     * equation to be invalid.
-     */
     public void setInvalid() {
         this.editor.setBackground(new Color(228, 48, 0));
     }
 
-    /**
-     * Retrieves the EquationEditor's Equation
-     *
-     * @return The equation representing the EquationEditor's contents
-     */
     public Equation getEquation() {
         return this.equation;
     }
 
-    /**
-     * Triggers the removal of the equation from the UI, and the callback of
-     * the `equationRemoved` callback.
-     */
     public void delete() {
         for (EquationEditorListener l : this.listeners) {
             l.equationRemoved(this.id);
         }
     }
 
-    /**
-     * Triggers processing of a new equation when the equation field is
-     * modified.
-     */
     protected void equationChanged() {
         try {
             this.equation = new Equation(this.editor.getText());
         } catch (Exception e) {
-            // Something is very wrong with the equation if we can't even get
-            // this far. Bail here
             this.setInvalid();
             return;
         }
@@ -252,10 +199,6 @@ public class EquationEditor extends JPanel implements AncestorListener, ActionLi
         }
     }
 
-    /**
-     * Convenience function to darken the background colours of all child
-     * components.
-     */
     private void darkenAllComponents() {
         // darkenComponent(this);
         // darkenComponent(this.titleRow);
@@ -264,10 +207,6 @@ public class EquationEditor extends JPanel implements AncestorListener, ActionLi
         // darkenComponent(this.deleteBtn);
     }
 
-    /**
-     * Convenience function to lighten the background colours of all child
-     * components.
-     */
     private void lightenAllComponents() {
         lightenComponent(this);
         lightenComponent(this.titleRow);
@@ -276,31 +215,14 @@ public class EquationEditor extends JPanel implements AncestorListener, ActionLi
         lightenComponent(this.deleteBtn);
     }
 
-    /**
-     * Lowers the background RGB values by 10.
-     *
-     * @param c The component to darken
-     */
     private void darkenComponent(Component c) {
         this.hsvDecrease(c, 10);
     }
 
-    /**
-     * Raises the background's RGB values by 10.
-     *
-     * @param c The component to lighten
-     */
     private void lightenComponent(Component c) {
         this.hsvDecrease(c, -10);
     }
 
-    /**
-     * Retrieves a component's current colour, then decreases each colour
-     * channel by amount.
-     *
-     * @param c      The component to adjust
-     * @param amount The amount to alter the colour brightness by
-     */
     private void hsvDecrease(Component c, int amount) {
         Color origColour = c.getBackground();
         int r = Math.min(255, origColour.getRed() - amount);

@@ -1,7 +1,5 @@
 package org.gcalc;
 
-// Custom NotImplementedException or use UnsupportedOperationException
-
 import java.security.InvalidParameterException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -16,6 +14,7 @@ import java.lang.UnsupportedOperationException;
 public class Equation {
     private Expression rhs;
     boolean isEmpty;
+    private String rawEquation;
 
     /**
      * Parses either an expression (no = in the string) or an equation, and
@@ -25,6 +24,7 @@ public class Equation {
      * @throws InvalidParameterException if the equation is malformed
      */
     public Equation(String rawEquation) throws InvalidParameterException {
+        this.rawEquation = rawEquation;
         rawEquation = rawEquation.replaceAll(" ", "");
         if (rawEquation.isEmpty()) {
             this.isEmpty = true;
@@ -48,6 +48,15 @@ public class Equation {
             equationParts[1] = this.rearrange(equationParts[0], equationParts[1]);
             equationParts[0] = "y";
         }
+    }
+
+    public String toString(){
+        return this.rawEquation;
+    }
+
+    public void setEquationString(String rawString){
+        this.rawEquation = rawString;
+
     }
 
     /**
