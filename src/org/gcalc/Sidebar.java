@@ -28,6 +28,7 @@ public class Sidebar extends JScrollPane implements ComponentListener, EquationE
         this.container.setLayout(new BoxLayout(this.container, BoxLayout.PAGE_AXIS));
         container.setMaximumSize(new Dimension(width - 10, Integer.MAX_VALUE));
 
+        this.newEquation();
         this.container.addComponentListener(this);
         this.addComponentListener(this);
     }
@@ -133,38 +134,25 @@ public class Sidebar extends JScrollPane implements ComponentListener, EquationE
         fileChooser.setDialogTitle("Load Workspace");
         fileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
         fileChooser.setSelectedFile(new File(WORKSPACE_FILE_NAME));
-
         int userSelection = fileChooser.showOpenDialog(this);
-
         if (userSelection == JFileChooser.APPROVE_OPTION) {
             File fileToLoad = fileChooser.getSelectedFile();
-
             this.deleteAllEquations();
-
             try (BufferedReader reader = new BufferedReader(new FileReader(fileToLoad))) {
-                StringBuilder equationBuilder = new StringBuilder();
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    if (line.startsWith("Expression ")) {
-                        if (equationBuilder.length() > 0) {
-                            loadEquationFromBlock(equationBuilder.toString());
-                            equationBuilder.setLength(0);
-                        }
+                    line = line.trim();
+                    if (!line.isEmpty()) {
+                        // Create new equation directly from the line
+                        this.loadEquation(line);
                     }
-                    equationBuilder.append(line).append("\n");
-                }
-                if (equationBuilder.length() > 0) {
-                    loadEquationFromBlock(equationBuilder.toString());
                 }
                 System.out.println("Workspace loaded from " + fileToLoad.getAbsolutePath());
-
                 if (this.editors.isEmpty()) {
                     this.newEquation();
                 }
-
                 this.revalidate();
                 this.repaint();
-
             } catch (IOException e) {
                 System.err.println("Error loading workspace: " + e.getMessage());
                 e.printStackTrace();
@@ -179,7 +167,6 @@ public class Sidebar extends JScrollPane implements ComponentListener, EquationE
             }
         }
     }
-
     private void loadEquationFromBlock(String block) {
         String titleLine = block.split("\n", 2)[0];
         if (titleLine.startsWith("Expression ")) {

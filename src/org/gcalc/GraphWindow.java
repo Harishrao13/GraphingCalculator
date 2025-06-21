@@ -27,12 +27,6 @@ public class GraphWindow extends JFrame implements ActionListener {
          * @throws Exception if anything went wrong /shrug
          */
         public GraphWindow() throws Exception {
-                // Try to set Darcula as UI theme. Otherwise, we'll just use the default
-                // try {
-                // UIManager.setLookAndFeel(DarculaLaf.class.getName());
-                // } catch (Exception e) { }
-
-                // Set window properties
                 this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
                 this.setTitle("Graphing Calculator");
 
