@@ -450,13 +450,16 @@ public class Equation {
                 return new Instruction(Instruction.InstType.NATIVEFUNC, "CBRT");
             } else if (substr.startsWith("floor(")) {
                 return new Instruction(Instruction.InstType.NATIVEFUNC, "FLOOR");
-            } else if (substr.startsWith("ceil(")) {
+            } else if (substr.startsWith("step(")) {
                 return new Instruction(Instruction.InstType.NATIVEFUNC, "CEIL");
             } else if (substr.startsWith("round(")) {
                 return new Instruction(Instruction.InstType.NATIVEFUNC, "ROUND");
             } else if (substr.startsWith("abs(")) {
                 return new Instruction(Instruction.InstType.NATIVEFUNC, "ABS");
+            } else if (substr.startsWith("exp(")) {
+                return new Instruction(Instruction.InstType.NATIVEFUNC, "EXP");
             }
+
 
             return null;
         }
@@ -504,6 +507,8 @@ public class Equation {
                     return Math.ceil(pop(stack));
                 case "ROUND":
                     return Math.round(pop(stack));
+                case "EXP":
+                    return Math.exp(pop(stack));
                 case "ABS":
                     return Math.abs(pop(stack));
                 case "POW":
