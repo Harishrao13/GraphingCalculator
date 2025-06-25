@@ -32,7 +32,7 @@ public class Equation {
         }
 
         String[] equationParts = rawEquation.split("=");
-
+//equation check implementation-trials
         if (equationParts.length > 2)
             throw new InvalidParameterException(
                     "Equation must not contain multiple equalities");
