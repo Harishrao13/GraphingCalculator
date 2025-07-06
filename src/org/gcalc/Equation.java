@@ -12,47 +12,75 @@ import java.lang.UnsupportedOperationException;
  * that as little variables as possible are needed to evaluate the equation.
  */
 public class Equation {
-    private Expression rhs;
-    boolean isEmpty;
     private String rawEquation;
+    private Expression rhs;
+    private boolean isEmpty;
+    private static boolean hasIntegralLimits = false;
+    private static double integralLowerLimit = 0;
+    private static double integralUpperLimit = 0;
 
-    /**
-     * Parses either an expression (no = in the string) or an equation, and
-     * produces an intermediate representation which can be easily evaluated.
-     *
-     * @param rawEquation String representing the expression or equation
-     * @throws InvalidParameterException if the equation is malformed
-     */
+    public boolean shouldPlotFunction() {
+        // Always plot the function, even if it has integral limits
+        return !isEmpty();
+    }
+
+    public boolean shouldCalculateIntegral() {
+        return hasIntegralLimits && !isEmpty();
+    }
+
     public Equation(String rawEquation) throws InvalidParameterException {
-        this.rawEquation = rawEquation;
-        rawEquation = rawEquation.replaceAll(" ", "");
-        if (rawEquation.isEmpty()) {
+        this.rawEquation = rawEquation.trim();
+        String processedEquation = this.rawEquation.replaceAll(" ", "");
+        
+        if (processedEquation.isEmpty()) {
             this.isEmpty = true;
             return;
         }
-        if (rawEquation.startsWith("-")) {
-            rawEquation = "0" + rawEquation;
+
+        // Handle integral limits format "function | a,b"
+        if (processedEquation.contains("|")) {
+        String[] parts = processedEquation.split("\\|");
+        if (parts.length == 2) {
+            // The actual function part
+            processedEquation = parts[0].trim();
+            
+            // Parse the bounds
+            String[] bounds = parts[1].trim().split(",");
+            if (bounds.length == 2) {
+                try {
+                    this.integralLowerLimit = Double.parseDouble(bounds[0]);
+                    this.integralUpperLimit = Double.parseDouble(bounds[1]);
+                    this.hasIntegralLimits = true;
+                } catch (NumberFormatException e) {
+                    throw new InvalidParameterException("Invalid integral bounds format");
+                }
+            }
+        }
+    }
+
+        if (processedEquation.startsWith("-")) {
+            processedEquation = "0" + processedEquation;
         }
 
+        // Standard equation parsing
+        String[] equationParts = processedEquation.split("=");
+        
+        if (equationParts.length > 2) {
+            throw new InvalidParameterException("Equation must not contain multiple equalities");
+        }
 
-
-        String[] equationParts = rawEquation.split("=");
-//equation check implementation-trials
-        if (equationParts.length > 2)
-            throw new InvalidParameterException(
-                    "Equation must not contain multiple equalities");
-
-        if (!rawEquation.contains("="))
-            // We assume that if no equality is specified, that the entire
-            // expression is equal to y
-            this.rhs = new Expression(rawEquation);
-        else {
-            // If an equality is specified, we need to make sure that the
-            // equation is expressed in terms of y, so that the evaluate()
-            // method works properly (it's rather naive)
+        if (!processedEquation.contains("=")) {
+            // Assume expression is equal to y
+            this.rhs = new Expression(processedEquation);
+        } else {
+            // Rearrange equation to be in terms of y
             equationParts[1] = this.rearrange(equationParts[0], equationParts[1]);
             equationParts[0] = "y";
+            this.rhs = new Expression(equationParts[1]);
         }
+
+        this.rawEquation = processedEquation;
+        this.isEmpty = processedEquation.isEmpty();
     }
 
     public String toString(){
@@ -62,6 +90,10 @@ public class Equation {
     public void setEquationString(String rawString){
         this.rawEquation = rawString;
 
+    }
+
+    public boolean isEmpty() {
+        return isEmpty;
     }
 
     /**
@@ -86,6 +118,21 @@ public class Equation {
             return this.rhs.evaluate(args);
         }
     }
+        public String getRawEquation(){
+            return this.rawEquation;
+        }
+
+        public boolean hasIntegralLimits() {
+            return hasIntegralLimits;
+        }
+
+        public double getIntegralLowerLimit() {
+            return integralLowerLimit;
+        }
+
+        public double getIntegralUpperLimit() {
+            return integralUpperLimit;
+        }
 
     /**
      * Retrieves the expression that is evaluated by evaluate()

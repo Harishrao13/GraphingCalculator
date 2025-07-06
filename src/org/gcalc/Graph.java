@@ -43,6 +43,7 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
     private Point lastDragPoint = null;
 
     private static final Color SKY_BLUE = new Color(135, 206, 235);
+    private static final Color INTEGRAL_AREA_COLOR = new Color(128, 0, 0); 
 
     public Graph(int width, int height) {
         this.width = width;
@@ -288,14 +289,16 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
         for (Equation e : this.equations) {
             if (e == null)
                 continue;
-            try {
-                this.drawEquation(g, id, e, this.img.getWidth(), this.img.getHeight());
-            } catch (Exception ex) {
-                EquationEditor editor = (id < editors.size()) ? editors.get(id) : null;
-                if (editor != null)
-                    editor.setInvalid();
-                System.err.printf("Error drawing equation %d: %s\n", id, ex.getMessage());
-                ex.printStackTrace();
+            if(e.shouldPlotFunction()){
+                try {
+                    this.drawEquation(g, id, e, this.img.getWidth(), this.img.getHeight());
+                } catch (Exception ex) {
+                    EquationEditor editor = (id < editors.size()) ? editors.get(id) : null;
+                    if (editor != null)
+                        editor.setInvalid();
+                    System.err.printf("Error drawing equation %d: %s\n", id, ex.getMessage());
+                    ex.printStackTrace();
+                }
             }
             id++;
         }
@@ -343,8 +346,13 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
     }
 
     protected void drawEquation(Graphics2D g, int id, Equation e, int imgWidth, int imgHeight) {
+        if (e.hasIntegralLimits()) {
+            drawIntegralArea(g, e, imgWidth, imgHeight);
+        }
+
         g.setColor(lineColours[id % lineColours.length]);
         g.setStroke(new BasicStroke(2));
+
 
         double xGraphMin = -imgWidth / 2.0 / (normInterval * this.scale);
         double xGraphMax = imgWidth / 2.0 / (normInterval * this.scale);
@@ -473,6 +481,41 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
         }
     }
 
+    protected void drawIntegralArea(Graphics2D g, Equation e, int imgWidth, int imgHeight) {
+    if (!e.hasIntegralLimits()) return;
+    
+    double lower = e.getIntegralLowerLimit();
+    double upper = e.getIntegralUpperLimit();
+    
+    // Create a polygon for the area under the curve
+    Polygon area = new Polygon();
+    
+    // Add points along the curve between the bounds
+    for (double x = lower; x <= upper; x += 0.01) {
+        try {
+            double y = e.evaluate(x)[0];
+            Point p = convertGraphToPixel(x, y);
+            area.addPoint(p.x, p.y);
+        } catch (Exception ex) {
+            // Skip points that can't be evaluated
+        }
+    }
+    
+    // Complete the polygon by adding points at the bottom
+    Point lowerRight = convertGraphToPixel(upper, 0);
+    Point lowerLeft = convertGraphToPixel(lower, 0);
+    area.addPoint(lowerRight.x, lowerRight.y);
+    area.addPoint(lowerLeft.x, lowerLeft.y);
+    
+    // Draw the filled area
+    g.setColor(INTEGRAL_AREA_COLOR);
+    g.fill(area);
+    
+    // Draw a border around the area
+    g.setColor(INTEGRAL_AREA_COLOR.darker());
+    g.draw(area);
+}
+
     public void saveWorkspace() {
         String filename = "workspace.txt";
 
@@ -505,6 +548,9 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
                 if (e == null)
                     continue;
                 try {
+                    if (e.hasIntegralLimits()) {
+                    svgGenerator.setColor(INTEGRAL_AREA_COLOR);
+                }
                     this.drawEquation(svgGenerator, id, e, this.width, this.height);
                 } catch (Exception ex) {
                     EquationEditor editor = (id < editors.size()) ? editors.get(id) : null;

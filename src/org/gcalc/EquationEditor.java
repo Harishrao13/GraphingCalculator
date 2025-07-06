@@ -154,23 +154,36 @@ public class EquationEditor extends JPanel implements AncestorListener, ActionLi
 }
 
     private void showIntegral() {
-        try {
-            String result = Calculus.integrate(this.editor.getText());
+    try {
+        String equationText = this.editor.getText();
+        Equation eq = new Equation(equationText);
+        
+        if (eq.shouldCalculateIntegral()) {
+            // Calculate and show definite integral
+            String result = Calculus.integrate(equationText);
+            intField.setText(result);
+            intField.setVisible(true);
+            
+            // DON'T add as a new equation to plot
+        } else {
+            // Calculate and show indefinite integral
+            String result = Calculus.integrate(equationText);
             intField.setText("∫dx: " + result);
             intField.setVisible(true);
-
-            // Notify listeners to add the integral as a new equation
+            
+            // Add as plottable equation
             for (EquationEditorListener l : this.listeners) {
                 l.addIntegral(this.id, result);
             }
-
-            revalidate();
-            repaint();
-        } catch (Exception ex) {
-            intField.setText("Error in integration");
-            intField.setVisible(true);
         }
+        
+        revalidate();
+        repaint();
+    } catch (Exception ex) {
+        intField.setText("Error in integration");
+        intField.setVisible(true);
     }
+}
 
     @Override
     public void ancestorAdded(AncestorEvent ancestorEvent) {

@@ -278,7 +278,7 @@ public class Sidebar extends JScrollPane implements ComponentListener, EquationE
         List<Equation> currentEquations = new ArrayList<>();
         for (EquationEditor editor : this.editors) {
             Equation eq = editor.getEquation();
-            if (eq != null && !eq.isEmpty) {
+            if (eq != null && !eq.isEmpty()) {
                 currentEquations.add(eq);
             }
         }
