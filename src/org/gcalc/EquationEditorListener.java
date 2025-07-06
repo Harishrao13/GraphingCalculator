@@ -21,4 +21,6 @@ public interface EquationEditorListener {
      * @param id The id of the removed EquationEditor
      */
     void equationRemoved(int id);
+    void addDerivative(int originalId, String derivativeExpr);
+    void addIntegral(int originalId, String integralExpr);
 }

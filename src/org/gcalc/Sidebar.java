@@ -49,14 +49,72 @@ public class Sidebar extends JScrollPane implements ComponentListener, EquationE
         this.repaint();
     }
 
-    @Override public void componentMoved(ComponentEvent componentEvent) { }
-    @Override public void componentShown(ComponentEvent componentEvent) { }
-    @Override public void componentHidden(ComponentEvent componentEvent) { }
+    @Override
+    public void componentMoved(ComponentEvent componentEvent) {
+    }
+
+    @Override
+    public void componentShown(ComponentEvent componentEvent) {
+    }
+
+    @Override
+    public void componentHidden(ComponentEvent componentEvent) {
+    }
 
     @Override
     public void equationEdited(int id, Equation equation) {
         for (EquationListener l : this.listeners) {
             l.equationChanged(id, equation);
+        }
+    }
+
+    @Override
+    public void addDerivative(int originalId, String derivativeExpr) {
+        if (originalId >= 0 && originalId < editors.size()) {
+            // Create a new equation editor for the derivative
+            int newId = editors.size();
+            EquationEditor derivativeEditor = new EquationEditor(newId, derivativeExpr);
+            derivativeEditor.addEquationEditorListener(this);
+            this.container.add(derivativeEditor);
+            this.editors.add(derivativeEditor);
+
+            // Set width and increased height
+            int width = this.getViewport().getSize().width;
+            derivativeEditor.setPreferredSize(new Dimension(width, 120)); // Increased height
+            derivativeEditor.setMaximumSize(new Dimension(width, 120)); // Increased height
+
+            // Notify listeners
+            for (EquationListener l : this.listeners) {
+                l.equationAdded(newId, derivativeEditor.getEquation(), derivativeEditor);
+            }
+
+            this.revalidate();
+            this.repaint();
+        }
+    }
+
+    @Override
+    public void addIntegral(int originalId, String integralExpr) {
+        if (originalId >= 0 && originalId < editors.size()) {
+            // Create a new equation editor for the integral
+            int newId = editors.size();
+            EquationEditor integralEditor = new EquationEditor(newId, integralExpr);
+            integralEditor.addEquationEditorListener(this);
+            this.container.add(integralEditor);
+            this.editors.add(integralEditor);
+
+            // Set width and increased height
+            int width = this.getViewport().getSize().width;
+            integralEditor.setPreferredSize(new Dimension(width, 120)); // Increased height
+            integralEditor.setMaximumSize(new Dimension(width, 120)); // Increased height
+
+            // Notify listeners
+            for (EquationListener l : this.listeners) {
+                l.equationAdded(newId, integralEditor.getEquation(), integralEditor);
+            }
+
+            this.revalidate();
+            this.repaint();
         }
     }
 
@@ -167,6 +225,7 @@ public class Sidebar extends JScrollPane implements ComponentListener, EquationE
             }
         }
     }
+
     private void loadEquationFromBlock(String block) {
         String titleLine = block.split("\n", 2)[0];
         if (titleLine.startsWith("Expression ")) {
