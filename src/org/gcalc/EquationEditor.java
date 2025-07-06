@@ -28,7 +28,7 @@ public class EquationEditor extends JPanel implements AncestorListener, ActionLi
 
     public EquationEditor(int id, String initialEquationString) {
         this.setLayout(new BoxLayout(this, BoxLayout.PAGE_AXIS));
-        
+
         this.setPreferredSize(new Dimension(width, 100));
         this.setMaximumSize(new Dimension(width, 100));
 
@@ -54,32 +54,40 @@ public class EquationEditor extends JPanel implements AncestorListener, ActionLi
         // Single button row for all actions
         this.buttonRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
         this.buttonRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
-        
+
         // Smaller calculus buttons
         this.diffBtn = createSmallButton("d/dx");
         this.intBtn = createSmallButton("∫");
-        this.deleteBtn = createSmallButton("x"); 
-        
+        this.deleteBtn = createSmallButton("x");
+
         this.diffBtn.addActionListener(this);
         this.intBtn.addActionListener(this);
         this.deleteBtn.addActionListener(this);
-        
+
         // Add tooltips for better UX
         this.diffBtn.setToolTipText("Differentiate");
         this.intBtn.setToolTipText("Integrate");
         this.deleteBtn.setToolTipText("Delete");
-        
+
         this.buttonRow.add(this.diffBtn);
         this.buttonRow.add(this.intBtn);
         this.buttonRow.add(this.deleteBtn);
-        
+
         this.add(this.buttonRow);
 
         // Document listener for equation changes
         this.editor.getDocument().addDocumentListener(new DocumentListener() {
-            public void insertUpdate(DocumentEvent e) { equationChanged(); }
-            public void removeUpdate(DocumentEvent e) { equationChanged(); }
-            public void changedUpdate(DocumentEvent e) { equationChanged(); }
+            public void insertUpdate(DocumentEvent e) {
+                equationChanged();
+            }
+
+            public void removeUpdate(DocumentEvent e) {
+                equationChanged();
+            }
+
+            public void changedUpdate(DocumentEvent e) {
+                equationChanged();
+            }
         });
 
         this.editor.addAncestorListener(this);
@@ -120,35 +128,42 @@ public class EquationEditor extends JPanel implements AncestorListener, ActionLi
     }
 
     private void showDerivative() {
-        try {
-            String result = Calculus.differentiate(this.editor.getText());
-            diffField.setText("d/dx: " + result);
-            diffField.setVisible(true);
-            
-            // Notify listeners to add the derivative as a new equation
-            for (EquationEditorListener l : this.listeners) {
-                l.addDerivative(this.id, result);
-            }
-            
-            revalidate();
-            repaint();
-        } catch (Exception ex) {
-            diffField.setText("Error in differentiation");
-            diffField.setVisible(true);
+    try {
+        String equationText = this.editor.getText();
+        String result = Calculus.differentiate(equationText);
+        String analysis = Calculus.findCriticalPoints(equationText);
+        
+        // Plain text output with line breaks
+        String plainText = "Derivative: " + result + "\n\n" +
+                         "Analysis:\n" + analysis;
+        
+        diffField.setText(plainText);
+        diffField.setVisible(true);
+        
+        // Notify listeners to add the derivative as a new equation
+        for (EquationEditorListener l : this.listeners) {
+            l.addDerivative(this.id, result);
         }
+        
+        revalidate();
+        repaint();
+    } catch (Exception ex) {
+        diffField.setText("Error in differentiation:\n" + ex.getMessage());
+        diffField.setVisible(true);
     }
+}
 
     private void showIntegral() {
         try {
             String result = Calculus.integrate(this.editor.getText());
             intField.setText("∫dx: " + result);
             intField.setVisible(true);
-            
+
             // Notify listeners to add the integral as a new equation
             for (EquationEditorListener l : this.listeners) {
                 l.addIntegral(this.id, result);
             }
-            
+
             revalidate();
             repaint();
         } catch (Exception ex) {
@@ -178,7 +193,6 @@ public class EquationEditor extends JPanel implements AncestorListener, ActionLi
     public void ancestorMoved(AncestorEvent ancestorEvent) {
     }
 
-
     public void setID(int newID) {
 
         this.editorNormalColor = this.editor.getBackground();
@@ -197,14 +211,14 @@ public class EquationEditor extends JPanel implements AncestorListener, ActionLi
     }
 
     public void setWidth(int width) {
-    this.width = width;
-    this.setPreferredSize(new Dimension(width, 120)); // Increased height
-    this.setMaximumSize(new Dimension(width, 120)); // Increased height
-    this.editor.setMaximumSize(new Dimension(width - 10, 30));
+        this.width = width;
+        this.setPreferredSize(new Dimension(width, 120)); // Increased height
+        this.setMaximumSize(new Dimension(width, 120)); // Increased height
+        this.editor.setMaximumSize(new Dimension(width - 10, 30));
 
-    this.revalidate();
-    this.repaint();
-}
+        this.revalidate();
+        this.repaint();
+    }
 
     public void addEquationEditorListener(EquationEditorListener listener) {
         this.listeners.add(listener);

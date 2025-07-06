@@ -20,9 +20,9 @@ import javax.xml.parsers.DocumentBuilderFactory;
 
 public class Graph extends JLabel implements ComponentListener, EquationListener {
     public static final Color[] lineColours = {
-        new Color(231, 76, 60), new Color(26, 188, 156), new Color(241, 196, 15),
-        new Color(211, 84, 0), new Color(39, 174, 96), new Color(41, 128, 185),
-        new Color(255, 0, 255)
+            new Color(231, 76, 60), new Color(26, 188, 156), new Color(241, 196, 15),
+            new Color(211, 84, 0), new Color(39, 174, 96), new Color(41, 128, 185),
+            new Color(255, 0, 255)
     };
 
     protected static final int normInterval = 50;
@@ -32,6 +32,7 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
     private ArrayList<Equation> equations = new ArrayList<>();
     private ArrayList<EquationEditor> editors = new ArrayList<>();
 
+    private Set<Point2D.Double> extremes;
     private List<Point2D.Double> clickedGraphPoints;
     private List<Point> clickedPixelPoints;
     private Set<Point2D.Double> intersectionPoints;
@@ -41,6 +42,7 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
     private double offsetY = 0;
     private Point lastDragPoint = null;
 
+    private static final Color SKY_BLUE = new Color(135, 206, 235);
 
     public Graph(int width, int height) {
         this.width = width;
@@ -49,6 +51,7 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
         this.setIcon(new ImageIcon(this.img));
         this.addComponentListener(this);
 
+        this.extremes = new HashSet<>();
         this.clickedGraphPoints = new ArrayList<>();
         this.clickedPixelPoints = new ArrayList<>();
         this.intersectionPoints = new HashSet<>();
@@ -61,7 +64,8 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
                 Point2D.Double graphPoint = convertPixelToGraph(mouseX, mouseY);
                 clickedGraphPoints.add(graphPoint);
                 clickedPixelPoints.add(new Point(mouseX, mouseY));
-                System.out.printf("Clicked at Pixel: (%d, %d) -> Graph: (x=%.2f, y=%.2f)\n", mouseX, mouseY, graphPoint.x, graphPoint.y);
+                System.out.printf("Clicked at Pixel: (%d, %d) -> Graph: (x=%.2f, y=%.2f)\n", mouseX, mouseY,
+                        graphPoint.x, graphPoint.y);
                 redraw();
             }
         });
@@ -79,13 +83,13 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
             public void mousePressed(MouseEvent e) {
                 lastDragPoint = e.getPoint();
             }
-        
+
             @Override
             public void mouseReleased(MouseEvent e) {
                 lastDragPoint = null;
             }
         });
-        
+
         addMouseMotionListener(new MouseAdapter() {
             @Override
             public void mouseDragged(MouseEvent e) {
@@ -93,16 +97,16 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
                     int dx = e.getX() - lastDragPoint.x;
                     int dy = e.getY() - lastDragPoint.y;
                     lastDragPoint = e.getPoint();
-        
+
                     // Convert pixel drag to graph-space drag
                     offsetX -= dx / (normInterval * scale);
                     offsetY += dy / (normInterval * scale);
-        
+
                     redraw();
                 }
             }
         });
-        
+
     }
 
     @Override
@@ -119,40 +123,151 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
         this.redraw();
     }
 
-    public void componentHidden(ComponentEvent e) {}
-    public void componentMoved(ComponentEvent e) {}
-    public void componentShown(ComponentEvent e) {}
+    public void componentHidden(ComponentEvent e) {
+    }
+
+    public void componentMoved(ComponentEvent e) {
+    }
+
+    public void componentShown(ComponentEvent e) {
+    }
 
     public void equationAdded(int id, Equation newEquation, EquationEditor editor) {
-        while (equations.size() <= id) equations.add(null);
-        while (editors.size() <= id) editors.add(null);
+        while (equations.size() <= id)
+            equations.add(null);
+        while (editors.size() <= id)
+            editors.add(null);
         this.equations.set(id, newEquation);
         this.editors.set(id, editor);
         this.redraw();
     }
 
+    private void updateExtremes() {
+        extremes.clear();
+        for (int i = 0; i < equations.size(); i++) {
+            if (equations.get(i) != null) {
+                findExtremesForEquation(i, equations.get(i));
+            }
+        }
+    }
+
+    private void findExtremesForEquation(int id, Equation eq) {
+        try {
+            // Sample points along the equation to find potential extremes
+            double xMin = -10 * scale; // Adjust based on current view
+            double xMax = 10 * scale;
+            double step = 0.1 / scale; // More precise sampling when zoomed in
+
+            double prevDerivative = Double.NaN;
+            double prevX = xMin - step;
+
+            for (double x = xMin; x <= xMax; x += step) {
+                try {
+                    // Numerical differentiation (central difference)
+                    double h = 0.0001;
+                    double y1 = eq.evaluate(x - h)[0];
+                    double y2 = eq.evaluate(x + h)[0];
+                    double derivative = (y2 - y1) / (2 * h);
+
+                    // Check for critical point (derivative ~0)
+                    if (!Double.isNaN(prevDerivative)) {
+                        if (prevDerivative * derivative < 0) { // Sign change
+                            // Refine the critical point position
+                            double criticalX = findCriticalPoint(eq, x - step, x);
+                            double criticalY = eq.evaluate(criticalX)[0];
+
+                            // Classify using second derivative
+                            double d1 = (eq.evaluate(criticalX + h)[0] - 2 * criticalY + eq.evaluate(criticalX - h)[0])
+                                    / (h * h);
+
+                            if (Math.abs(d1) > 0.1) { // Filter out flat regions
+                                extremes.add(new Point2D.Double(criticalX, criticalY));
+                            }
+                        }
+                    }
+
+                    prevDerivative = derivative;
+                    prevX = x;
+                } catch (Exception e) {
+                    // Skip points where evaluation fails
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error finding extremes: " + e.getMessage());
+        }
+    }
+
+    private double findCriticalPoint(Equation eq, double x1, double x2) {
+        // Simple bisection method to refine critical point
+        final double tolerance = 0.0001;
+        final int maxIterations = 100;
+        double h = 0.0001;
+
+        for (int i = 0; i < maxIterations; i++) {
+            double mid = (x1 + x2) / 2;
+            double d1 = (eq.evaluate(x1 + h)[0] - eq.evaluate(x1 - h)[0]) / (2 * h);
+            double dMid = (eq.evaluate(mid + h)[0] - eq.evaluate(mid - h)[0]) / (2 * h);
+
+            if (Math.abs(dMid) < tolerance) {
+                return mid;
+            }
+
+            if (d1 * dMid < 0) {
+                x2 = mid;
+            } else {
+                x1 = mid;
+            }
+        }
+        return (x1 + x2) / 2;
+    }
+
     public void equationRemoved(int id) {
-        if (id >= 0 && id < equations.size()) equations.set(id, null);
-        if (id >= 0 && id < editors.size()) editors.set(id, null);
+        if (id < 0 || id >= equations.size())
+            return;
+
+        // Remove the equation and editor at the specified position
+        equations.remove(id);
+        editors.remove(id);
+
+        // Update IDs for all remaining equations
+        for (int i = id; i < editors.size(); i++) {
+            editors.get(i).setID(i);
+        }
+
         this.redraw();
     }
 
     public void equationChanged(int id, Equation e) {
-        if (id >= 0 && id < equations.size()) this.equations.set(id, e);
+        if (id >= 0 && id < equations.size()) {
+            this.equations.set(id, e);
+            updateExtremes();
+            this.redraw();
+        }
+    }
+
+    public void increaseScale() {
+        this.setScale(this.getScale() * 1.5);
+    }
+
+    public void decreaseScale() {
+        this.setScale(this.getScale() / 1.5);
+    }
+
+    public void setScale(double scale) {
+        this.scale = scale;
         this.redraw();
     }
 
-    public void increaseScale() { this.setScale(this.getScale() * 1.5); }
-    public void decreaseScale() { this.setScale(this.getScale() / 1.5); }
-    public void setScale(double scale) { this.scale = scale; this.redraw(); }
-    public double getScale() { return this.scale; }
+    public double getScale() {
+        return this.scale;
+    }
 
     protected Point convertGraphToPixel(double graphX, double graphY) {
         int pixelX = (int) (this.img.getWidth() / 2.0 + (graphX - offsetX) * (normInterval * this.scale));
         int pixelY = (int) (this.img.getHeight() / 2.0 - (graphY - offsetY) * (normInterval * this.scale));
         return new Point(pixelX, pixelY);
     }
-    
+
     protected Point2D.Double convertPixelToGraph(int pixelX, int pixelY) {
         double graphX = offsetX + (pixelX - this.img.getWidth() / 2.0) / (normInterval * this.scale);
         double graphY = offsetY + (this.img.getHeight() / 2.0 - pixelY) / (normInterval * this.scale);
@@ -171,12 +286,14 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
 
         int id = 0;
         for (Equation e : this.equations) {
-            if (e == null) continue;
+            if (e == null)
+                continue;
             try {
                 this.drawEquation(g, id, e, this.img.getWidth(), this.img.getHeight());
             } catch (Exception ex) {
                 EquationEditor editor = (id < editors.size()) ? editors.get(id) : null;
-                if (editor != null) editor.setInvalid();
+                if (editor != null)
+                    editor.setInvalid();
                 System.err.printf("Error drawing equation %d: %s\n", id, ex.getMessage());
                 ex.printStackTrace();
             }
@@ -196,7 +313,8 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
         int intersectionDotSize = 10;
         for (Point2D.Double graphP : intersectionPoints) {
             Point pixelP = convertGraphToPixel(graphP.x, graphP.y);
-            g.fillOval(pixelP.x - intersectionDotSize / 2, pixelP.y - intersectionDotSize / 2, intersectionDotSize, intersectionDotSize);
+            g.fillOval(pixelP.x - intersectionDotSize / 2, pixelP.y - intersectionDotSize / 2, intersectionDotSize,
+                    intersectionDotSize);
             String coordStr = String.format("(%.2f, %.2f)", graphP.x, graphP.y);
             g.drawString(coordStr, pixelP.x + intersectionDotSize, pixelP.y - intersectionDotSize);
         }
@@ -206,6 +324,19 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
             g.setColor(Color.BLUE);
             String text = String.format("(%.2f, %.2f)", gp.x, gp.y);
             g.drawString(text, hoveredPoint.x + 10, hoveredPoint.y - 10);
+        }
+
+        // Draw extreme points with sky blue color
+        g.setColor(SKY_BLUE);
+        int extremeDotSize = 12;
+        for (Point2D.Double graphP : extremes) {
+            Point pixelP = convertGraphToPixel(graphP.x, graphP.y);
+            g.fillOval(pixelP.x - extremeDotSize / 2, pixelP.y - extremeDotSize / 2,
+                    extremeDotSize, extremeDotSize);
+
+            // Add label with coordinates
+            String coordStr = String.format("(%.2f, %.2f)", graphP.x, graphP.y);
+            g.drawString(coordStr, pixelP.x + extremeDotSize, pixelP.y - extremeDotSize);
         }
 
         this.repaint();
@@ -229,7 +360,8 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
                 Point currentPixelPoint = convertGraphToPixel(graphX, graphY);
 
                 if (lastPixelPoint != null) {
-                    g.draw(new Line2D.Double(lastPixelPoint.x, lastPixelPoint.y, currentPixelPoint.x, currentPixelPoint.y));
+                    g.draw(new Line2D.Double(lastPixelPoint.x, lastPixelPoint.y, currentPixelPoint.x,
+                            currentPixelPoint.y));
                 }
                 lastPixelPoint = currentPixelPoint;
             } else {
@@ -240,55 +372,53 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
         if (id > 0) {
             for (int prevId = 0; prevId < id; prevId++) {
                 Equation prevEquation = equations.get(prevId);
-                if (prevEquation == null) continue;
-        
+                if (prevEquation == null)
+                    continue;
+
                 Point2D.Double lastIntersection = null;
-                double minDistanceBetweenIntersections = 0.3; 
-                
+                double minDistanceBetweenIntersections = 0.3;
+
                 for (int pixelX = 0; pixelX < imgWidth; pixelX += 2) {
                     double graphX = convertPixelToGraph(pixelX, 0).x;
                     double[] y1Values = e.evaluate(graphX);
                     double[] y2Values = prevEquation.evaluate(graphX);
-        
+
                     if (y1Values.length > 0 && !Double.isNaN(y1Values[0]) &&
-                        y2Values.length > 0 && !Double.isNaN(y2Values[0])) {
-        
+                            y2Values.length > 0 && !Double.isNaN(y2Values[0])) {
+
                         double y1 = y1Values[0];
                         double y2 = y2Values[0];
-                        
+
                         // More reasonable tolerance based on scale
                         double tolerance = Math.max(0.01 / this.scale, 0.01);
-        
+
                         if (Math.abs(y1 - y2) < tolerance) {
                             Point2D.Double candidate = new Point2D.Double(
-                                Math.round(graphX * 100) / 100.0, 
-                                Math.round(((y1 + y2) / 2.0) * 100) / 100.0
-                            );
-                            
+                                    Math.round(graphX * 100) / 100.0,
+                                    Math.round(((y1 + y2) / 2.0) * 100) / 100.0);
+
                             // Check if this intersection is far enough from the last one
                             boolean shouldAdd = true;
                             if (lastIntersection != null) {
                                 double distance = Math.sqrt(
-                                    Math.pow(candidate.x - lastIntersection.x, 2) + 
-                                    Math.pow(candidate.y - lastIntersection.y, 2)
-                                );
+                                        Math.pow(candidate.x - lastIntersection.x, 2) +
+                                                Math.pow(candidate.y - lastIntersection.y, 2));
                                 if (distance < minDistanceBetweenIntersections) {
                                     shouldAdd = false;
                                 }
                             }
-                            
+
                             // Also check against existing intersection points
                             for (Point2D.Double existing : intersectionPoints) {
                                 double distance = Math.sqrt(
-                                    Math.pow(candidate.x - existing.x, 2) + 
-                                    Math.pow(candidate.y - existing.y, 2)
-                                );
+                                        Math.pow(candidate.x - existing.x, 2) +
+                                                Math.pow(candidate.y - existing.y, 2));
                                 if (distance < minDistanceBetweenIntersections) {
                                     shouldAdd = false;
                                     break;
                                 }
                             }
-                            
+
                             if (shouldAdd) {
                                 intersectionPoints.add(candidate);
                                 lastIntersection = candidate;
@@ -298,49 +428,50 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
                 }
             }
         }
+    }
+
+    protected void drawGrid(Graphics2D g, int imgWidth, int imgHeight) {
+        float[] dashPattern = new float[] { 10 * (float) this.scale, 5 * (float) this.scale };
+        g.setColor(new Color(48, 48, 48));
+
+        int centerX = imgWidth / 2;
+        int centerY = imgHeight / 2;
+
+        g.setStroke(new BasicStroke(2));
+        // Axes (adjusted for offset)
+        int axisX = (int) (centerX - offsetX * normInterval * scale);
+        int axisY = (int) (centerY + offsetY * normInterval * scale);
+        g.draw(new Line2D.Double(0, axisY, imgWidth, axisY)); // X axis
+        g.draw(new Line2D.Double(axisX, 0, axisX, imgHeight)); // Y axis
+
+        // Grid lines
+        g.setStroke(new BasicStroke(1, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10, dashPattern, 0));
+        int interval = (int) Math.round(normInterval * this.scale);
+        if (interval < 1)
+            interval = 1;
+
+        // Calculate start points in graph space
+        double graphXMin = convertPixelToGraph(0, 0).x;
+        double graphXMax = convertPixelToGraph(imgWidth, 0).x;
+        double graphYMin = convertPixelToGraph(0, imgHeight).y;
+        double graphYMax = convertPixelToGraph(0, 0).y;
+
+        // Draw vertical grid lines
+        for (int i = (int) Math.floor(graphXMin); i <= (int) Math.ceil(graphXMax); i++) {
+            int x = convertGraphToPixel(i, 0).x;
+            g.draw(new Line2D.Double(x, 0, x, imgHeight));
+            if (Math.abs(i) > 1e-6) // skip 0 label on X-axis
+                g.drawString(Integer.toString(i), x + 2, axisY + 14);
         }
 
-        protected void drawGrid(Graphics2D g, int imgWidth, int imgHeight) {
-            float[] dashPattern = new float[]{10 * (float) this.scale, 5 * (float) this.scale};
-            g.setColor(new Color(48, 48, 48));
-        
-            int centerX = imgWidth / 2;
-            int centerY = imgHeight / 2;
-        
-            g.setStroke(new BasicStroke(2));
-            // Axes (adjusted for offset)
-            int axisX = (int) (centerX - offsetX * normInterval * scale);
-            int axisY = (int) (centerY + offsetY * normInterval * scale);
-            g.draw(new Line2D.Double(0, axisY, imgWidth, axisY)); // X axis
-            g.draw(new Line2D.Double(axisX, 0, axisX, imgHeight)); // Y axis
-        
-            // Grid lines
-            g.setStroke(new BasicStroke(1, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10, dashPattern, 0)); 
-            int interval = (int) Math.round(normInterval * this.scale);
-            if (interval < 1) interval = 1;
-        
-            // Calculate start points in graph space
-            double graphXMin = convertPixelToGraph(0, 0).x;
-            double graphXMax = convertPixelToGraph(imgWidth, 0).x;
-            double graphYMin = convertPixelToGraph(0, imgHeight).y;
-            double graphYMax = convertPixelToGraph(0, 0).y;
-        
-            // Draw vertical grid lines
-            for (int i = (int) Math.floor(graphXMin); i <= (int) Math.ceil(graphXMax); i++) {
-                int x = convertGraphToPixel(i, 0).x;
-                g.draw(new Line2D.Double(x, 0, x, imgHeight));
-                if (Math.abs(i) > 1e-6) // skip 0 label on X-axis
-                    g.drawString(Integer.toString(i), x + 2, axisY + 14);
-            }
-        
-            // Draw horizontal grid lines
-            for (int j = (int) Math.floor(graphYMin); j <= (int) Math.ceil(graphYMax); j++) {
-                int y = convertGraphToPixel(0, j).y;
-                g.draw(new Line2D.Double(0, y, imgWidth, y));
-                if (Math.abs(j) > 1e-6) // skip 0 label on Y-axis
-                    g.drawString(Integer.toString(j), axisX + 2, y + 14);
-            }
+        // Draw horizontal grid lines
+        for (int j = (int) Math.floor(graphYMin); j <= (int) Math.ceil(graphYMax); j++) {
+            int y = convertGraphToPixel(0, j).y;
+            g.draw(new Line2D.Double(0, y, imgWidth, y));
+            if (Math.abs(j) > 1e-6) // skip 0 label on Y-axis
+                g.drawString(Integer.toString(j), axisX + 2, y + 14);
         }
+    }
 
     public void saveWorkspace() {
         String filename = "workspace.txt";
@@ -360,7 +491,8 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
 
     public void saveAsSVG(File file) {
         try {
-            DOMImplementation domImpl = DocumentBuilderFactory.newInstance().newDocumentBuilder().getDOMImplementation();
+            DOMImplementation domImpl = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+                    .getDOMImplementation();
             Document document = domImpl.createDocument(null, "svg", null);
             SVGGraphics2D svgGenerator = new SVGGraphics2D(document);
             svgGenerator.setSVGCanvasSize(new Dimension(this.width, this.height));
@@ -370,12 +502,14 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
             this.drawGrid(svgGenerator, this.width, this.height);
             int id = 0;
             for (Equation e : this.equations) {
-                if (e == null) continue;
+                if (e == null)
+                    continue;
                 try {
                     this.drawEquation(svgGenerator, id, e, this.width, this.height);
                 } catch (Exception ex) {
                     EquationEditor editor = (id < editors.size()) ? editors.get(id) : null;
-                    if (editor != null) editor.setInvalid();
+                    if (editor != null)
+                        editor.setInvalid();
                 }
                 id++;
             }
@@ -385,11 +519,24 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
             int clickedDotSize = 8;
             for (Point pixelP : clickedPixelPoints) {
                 // SVG coordinates are typically top-left origin, matching Swing pixel (x,y)
-                svgGenerator.fillOval(pixelP.x - clickedDotSize / 2, pixelP.y - clickedDotSize / 2, clickedDotSize, clickedDotSize);
+                svgGenerator.fillOval(pixelP.x - clickedDotSize / 2, pixelP.y - clickedDotSize / 2, clickedDotSize,
+                        clickedDotSize);
                 String coordStr = String.format("(%.2f, %.2f)",
-                                                convertPixelToGraph(pixelP.x, pixelP.y).x,
-                                                convertPixelToGraph(pixelP.x, pixelP.y).y);
+                        convertPixelToGraph(pixelP.x, pixelP.y).x,
+                        convertPixelToGraph(pixelP.x, pixelP.y).y);
                 svgGenerator.drawString(coordStr, pixelP.x + clickedDotSize, pixelP.y - clickedDotSize);
+            }
+
+            // Draw extemas on SVG
+            // Draw extreme points on SVG
+            svgGenerator.setColor(SKY_BLUE);
+            int extremeDotSize = 12;
+            for (Point2D.Double graphP : extremes) {
+                Point pixelP = convertGraphToPixel(graphP.x, graphP.y);
+                svgGenerator.fillOval(pixelP.x - extremeDotSize / 2, pixelP.y - extremeDotSize / 2,
+                        extremeDotSize, extremeDotSize);
+                String coordStr = String.format("(%.2f, %.2f)", graphP.x, graphP.y);
+                svgGenerator.drawString(coordStr, pixelP.x + extremeDotSize, pixelP.y - extremeDotSize);
             }
 
             // Draw intersection points on SVG
@@ -397,11 +544,11 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
             int intersectionDotSize = 10;
             for (Point2D.Double graphP : intersectionPoints) {
                 Point pixelP = convertGraphToPixel(graphP.x, graphP.y);
-                svgGenerator.fillOval(pixelP.x - intersectionDotSize / 2, pixelP.y - intersectionDotSize / 2, intersectionDotSize, intersectionDotSize);
+                svgGenerator.fillOval(pixelP.x - intersectionDotSize / 2, pixelP.y - intersectionDotSize / 2,
+                        intersectionDotSize, intersectionDotSize);
                 String coordStr = String.format("(%.2f, %.2f)", graphP.x, graphP.y);
                 svgGenerator.drawString(coordStr, pixelP.x + intersectionDotSize, pixelP.y - intersectionDotSize);
             }
-
 
             try (Writer out = new OutputStreamWriter(new FileOutputStream(file), "UTF-8")) {
                 svgGenerator.stream(out, true);

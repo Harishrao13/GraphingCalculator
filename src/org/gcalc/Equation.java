@@ -30,6 +30,11 @@ public class Equation {
             this.isEmpty = true;
             return;
         }
+        if (rawEquation.startsWith("-")) {
+            rawEquation = "0" + rawEquation;
+        }
+
+
 
         String[] equationParts = rawEquation.split("=");
 //equation check implementation-trials
