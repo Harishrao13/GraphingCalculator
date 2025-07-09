@@ -345,99 +345,107 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
         this.repaint();
     }
 
-    protected void drawEquation(Graphics2D g, int id, Equation e, int imgWidth, int imgHeight) {
-        if (e.hasIntegralLimits()) {
-            drawIntegralArea(g, e, imgWidth, imgHeight);
-        }
+protected void drawEquation(Graphics2D g, int id, Equation e, int imgWidth, int imgHeight) {
+    if (e.hasIntegralLimits()) {
+        drawIntegralArea(g, e, imgWidth, imgHeight);
+    }
 
-        g.setColor(lineColours[id % lineColours.length]);
-        g.setStroke(new BasicStroke(2));
+    g.setColor(lineColours[id % lineColours.length]);
+    g.setStroke(new BasicStroke(2));
 
+    double xGraphMin = -imgWidth / 2.0 / (normInterval * this.scale);
+    double xGraphMax = imgWidth / 2.0 / (normInterval * this.scale);
+    double step = (xGraphMax - xGraphMin) / imgWidth;
 
-        double xGraphMin = -imgWidth / 2.0 / (normInterval * this.scale);
-        double xGraphMax = imgWidth / 2.0 / (normInterval * this.scale);
-        double step = (xGraphMax - xGraphMin) / imgWidth;
+    Point lastPixelPoint = null;
+    double lastGraphY = Double.NaN;
+    double jumpThreshold = 10.0 * normInterval * scale; // Threshold for detecting discontinuities
 
-        Point lastPixelPoint = null;
-        for (int pixelX = 0; pixelX < imgWidth; pixelX++) {
-            double graphX = convertPixelToGraph(pixelX, 0).x;
-            double[] yValues = e.evaluate(graphX);
+    for (int pixelX = 0; pixelX < imgWidth; pixelX++) {
+        double graphX = convertPixelToGraph(pixelX, 0).x;
+        double[] yValues = e.evaluate(graphX);
 
-            if (yValues.length > 0 && !Double.isNaN(yValues[0])) {
-                double graphY = yValues[0];
-                Point currentPixelPoint = convertGraphToPixel(graphX, graphY);
+        if (yValues.length > 0 && !Double.isNaN(yValues[0])) {
+            double graphY = yValues[0];
+            Point currentPixelPoint = convertGraphToPixel(graphX, graphY);
 
-                if (lastPixelPoint != null) {
-                    g.draw(new Line2D.Double(lastPixelPoint.x, lastPixelPoint.y, currentPixelPoint.x,
-                            currentPixelPoint.y));
+            // Check for discontinuity (large jump in y-value)
+            if (lastPixelPoint != null && !Double.isNaN(lastGraphY)) {
+                double yDiff = Math.abs(graphY - lastGraphY);
+                if (yDiff > jumpThreshold) {
+                    lastPixelPoint = null; // Don't connect points across discontinuity
                 }
-                lastPixelPoint = currentPixelPoint;
-            } else {
-                lastPixelPoint = null;
             }
+
+            if (lastPixelPoint != null) {
+                g.draw(new Line2D.Double(lastPixelPoint.x, lastPixelPoint.y, 
+                                       currentPixelPoint.x, currentPixelPoint.y));
+            }
+            
+            lastPixelPoint = currentPixelPoint;
+            lastGraphY = graphY;
+        } else {
+            lastPixelPoint = null;
+            lastGraphY = Double.NaN;
         }
+    }
 
-        if (id > 0) {
-            for (int prevId = 0; prevId < id; prevId++) {
-                Equation prevEquation = equations.get(prevId);
-                if (prevEquation == null)
-                    continue;
+    // Rest of the method remains the same for intersection detection...
+    if (id > 0) {
+        for (int prevId = 0; prevId < id; prevId++) {
+            Equation prevEquation = equations.get(prevId);
+            if (prevEquation == null) continue;
 
-                Point2D.Double lastIntersection = null;
-                double minDistanceBetweenIntersections = 0.3;
+            Point2D.Double lastIntersection = null;
+            double minDistanceBetweenIntersections = 0.3;
 
-                for (int pixelX = 0; pixelX < imgWidth; pixelX += 2) {
-                    double graphX = convertPixelToGraph(pixelX, 0).x;
-                    double[] y1Values = e.evaluate(graphX);
-                    double[] y2Values = prevEquation.evaluate(graphX);
+            for (int pixelX = 0; pixelX < imgWidth; pixelX += 2) {
+                double graphX = convertPixelToGraph(pixelX, 0).x;
+                double[] y1Values = e.evaluate(graphX);
+                double[] y2Values = prevEquation.evaluate(graphX);
 
-                    if (y1Values.length > 0 && !Double.isNaN(y1Values[0]) &&
-                            y2Values.length > 0 && !Double.isNaN(y2Values[0])) {
+                if (y1Values.length > 0 && !Double.isNaN(y1Values[0]) &&
+                    y2Values.length > 0 && !Double.isNaN(y2Values[0])) {
+                    
+                    double y1 = y1Values[0];
+                    double y2 = y2Values[0];
+                    double tolerance = Math.max(0.01 / this.scale, 0.01);
 
-                        double y1 = y1Values[0];
-                        double y2 = y2Values[0];
+                    if (Math.abs(y1 - y2) < tolerance) {
+                        Point2D.Double candidate = new Point2D.Double(
+                            Math.round(graphX * 100) / 100.0,
+                            Math.round(((y1 + y2) / 2.0) * 100) / 100.0);
 
-                        // More reasonable tolerance based on scale
-                        double tolerance = Math.max(0.01 / this.scale, 0.01);
-
-                        if (Math.abs(y1 - y2) < tolerance) {
-                            Point2D.Double candidate = new Point2D.Double(
-                                    Math.round(graphX * 100) / 100.0,
-                                    Math.round(((y1 + y2) / 2.0) * 100) / 100.0);
-
-                            // Check if this intersection is far enough from the last one
-                            boolean shouldAdd = true;
-                            if (lastIntersection != null) {
-                                double distance = Math.sqrt(
-                                        Math.pow(candidate.x - lastIntersection.x, 2) +
-                                                Math.pow(candidate.y - lastIntersection.y, 2));
-                                if (distance < minDistanceBetweenIntersections) {
-                                    shouldAdd = false;
-                                }
+                        boolean shouldAdd = true;
+                        if (lastIntersection != null) {
+                            double distance = Math.sqrt(
+                                Math.pow(candidate.x - lastIntersection.x, 2) +
+                                Math.pow(candidate.y - lastIntersection.y, 2));
+                            if (distance < minDistanceBetweenIntersections) {
+                                shouldAdd = false;
                             }
+                        }
 
-                            // Also check against existing intersection points
-                            for (Point2D.Double existing : intersectionPoints) {
-                                double distance = Math.sqrt(
-                                        Math.pow(candidate.x - existing.x, 2) +
-                                                Math.pow(candidate.y - existing.y, 2));
-                                if (distance < minDistanceBetweenIntersections) {
-                                    shouldAdd = false;
-                                    break;
-                                }
+                        for (Point2D.Double existing : intersectionPoints) {
+                            double distance = Math.sqrt(
+                                Math.pow(candidate.x - existing.x, 2) +
+                                Math.pow(candidate.y - existing.y, 2));
+                            if (distance < minDistanceBetweenIntersections) {
+                                shouldAdd = false;
+                                break;
                             }
+                        }
 
-                            if (shouldAdd) {
-                                intersectionPoints.add(candidate);
-                                lastIntersection = candidate;
-                            }
+                        if (shouldAdd) {
+                            intersectionPoints.add(candidate);
+                            lastIntersection = candidate;
                         }
                     }
                 }
             }
         }
     }
-
+}
     protected void drawGrid(Graphics2D g, int imgWidth, int imgHeight) {
         float[] dashPattern = new float[] { 10 * (float) this.scale, 5 * (float) this.scale };
         g.setColor(new Color(48, 48, 48));
@@ -481,7 +489,7 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
         }
     }
 
-    protected void drawIntegralArea(Graphics2D g, Equation e, int imgWidth, int imgHeight) {
+protected void drawIntegralArea(Graphics2D g, Equation e, int imgWidth, int imgHeight) {
     if (!e.hasIntegralLimits()) return;
     
     double lower = e.getIntegralLowerLimit();
@@ -498,6 +506,7 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
             area.addPoint(p.x, p.y);
         } catch (Exception ex) {
             // Skip points that can't be evaluated
+            ex.printStackTrace();
         }
     }
     
@@ -508,12 +517,23 @@ public class Graph extends JLabel implements ComponentListener, EquationListener
     area.addPoint(lowerLeft.x, lowerLeft.y);
     
     // Draw the filled area
-    g.setColor(INTEGRAL_AREA_COLOR);
+    Color integralColor = new Color(INTEGRAL_AREA_COLOR.getRed(), 
+                                  INTEGRAL_AREA_COLOR.getGreen(), 
+                                  INTEGRAL_AREA_COLOR.getBlue(), 
+                                  128); // Semi-transparent
+    g.setColor(integralColor);
     g.fill(area);
     
     // Draw a border around the area
-    g.setColor(INTEGRAL_AREA_COLOR.darker());
+    // g.setColor(INTEGRAL_AREA_COLOR.darker());
     g.draw(area);
+    
+    // Draw the integral limits
+    g.setColor(Color.BLACK);
+    Point lowerLimitPoint = convertGraphToPixel(lower, 0);
+    Point upperLimitPoint = convertGraphToPixel(upper, 0);
+    g.drawString(String.format("%.2f", lower), lowerLimitPoint.x, lowerLimitPoint.y + 15);
+    g.drawString(String.format("%.2f", upper), upperLimitPoint.x, upperLimitPoint.y + 15);
 }
 
     public void saveWorkspace() {
