@@ -28,7 +28,7 @@ public class Factorial {
     /**
      * The value of the {@code g} constant in the Lanczos approximation, see
      * {@link #lanczos(double)}.
-     * @since 3.1
+     * @since 3.2
      */
     private static final double LANCZOS_G = 607.0 / 128.0;
 
